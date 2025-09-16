@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ultimate To-Do App</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body { transition: background 0.3s, color 0.3s; }
+.fade-in { opacity:0; transition: opacity 0.3s ease-in; }
+.fade-in.show { opacity:1; }
+.completed { text-decoration: line-through; color: gray; }
+.dragging { opacity:0.5; border:2px dashed #333; }
+.due-today { background-color:#fef3c7 !important; }
+.dark-mode { background-color:#1f2937; color:white; }
+.dark-mode .container { background-color:#374151; color:white; }
+.tooltip { position: relative; display: inline-block; cursor: pointer; }
+.tooltip .tooltiptext { visibility: hidden; width: 140px; background-color: black; color: #fff; text-align: center; border-radius: 6px; padding: 5px; position: absolute; z-index: 1; bottom: 125%; left: 50%; margin-left: -70px; opacity: 0; transition: opacity 0.3s; }
+.tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+button:hover { transform: scale(1.03); transition: transform 0.2s ease-in-out; }
+li:hover { transform: translateY(-2px); transition: transform 0.2s ease-in-out; }
+</style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-6">
+
+<div class="container bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl transition duration-300">
+  <h1 class="text-3xl font-bold text-center mb-6">Ultimate To-Do App</h1>
+  <div class="flex justify-end mb-4">
+    <button id="darkModeBtn" class="tooltip bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded transition">
+      Toggle Dark Mode
+      <span class="tooltiptext">Switch Light/Dark Mode</span>
+    </button>
+  </div>
+  <div class="flex flex-col md:flex-row gap-3 mb-6">
+    <input type="text" id="searchInput" placeholder="Search tasks..." class="flex-1 border rounded px-3 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+    <select id="sortSelect" class="border rounded px-3 py-3 text-lg">
+      <option value="date">Sort by Date</option>
+      <option value="priority">Sort by Priority</option>
+      <option value="completed">Sort by Completed</option>
+    </select>
+  </div>
+  <div class="flex flex-col md:flex-row mb-6 gap-3">
+    <input type="text" id="taskInput" placeholder="Add new task..." class="flex-1 border rounded px-3 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-400">
+    <input type="date" id="taskDate" class="border rounded px-3 py-3 text-lg" value="">
+    <select id="taskPriority" class="border rounded px-3 py-3 text-lg">
+      <option value="High">High</option>
+      <option value="Normal">Normal</option>
+      <option value="Low">Low</option>
+    </select>
+    <input type="text" id="taskTag" placeholder="Tag (optional)" class="border rounded px-3 py-3 text-lg">
+    <button id="addBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded transition duration-300 text-lg">Add Task</button>
+  </div>
+  <div class="flex flex-wrap gap-2 mb-6">
+    <button id="filterAll" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">All</button>
+    <button id="filterHigh" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">High</button>
+    <button id="filterNormal" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Normal</button>
+    <button id="filterLow" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">Low</button>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="dashboardColumns">
+    <div id="highTasks" class="p-3 bg-red-50 rounded-lg shadow">
+      <h2 class="font-bold text-xl mb-2">High Priority (<span id="countHigh">0</span>)</h2>
+      <div class="w-full bg-red-200 h-3 rounded mb-2">
+        <div id="progressHigh" class="bg-red-500 h-3 rounded" style="width:0%"></div>
+      </div>
+      <ul id="highTaskList" class="space-y-3"></ul>
+    </div>
+    <div id="normalTasks" class="p-3 bg-blue-50 rounded-lg shadow">
+      <h2 class="font-bold text-xl mb-2">Normal Priority (<span id="countNormal">0</span>)</h2>
+      <div class="w-full bg-blue-200 h-3 rounded mb-2">
+        <div id="progressNormal" class="bg-blue-500 h-3 rounded" style="width:0%"></div>
+      </div>
+      <ul id="normalTaskList" class="space-y-3"></ul>
+    </div>
+    <div id="lowTasks" class="p-3 bg-green-50 rounded-lg shadow">
+      <h2 class="font-bold text-xl mb-2">Low Priority (<span id="countLow">0</span>)</h2>
+      <div class="w-full bg-green-200 h-3 rounded mb-2">
+        <div id="progressLow" class="bg-green-500 h-3 rounded" style="width:0%"></div>
+      </div>
+      <ul id="lowTaskList" class="space-y-3"></ul>
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-3 mt-6">
+    <button id="clearAll" class="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded">Clear All</button>
+    <button id="clearCompleted" class="bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-2 rounded">Delete Completed</button>
+    <button id="exportBtn" class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded">Export JSON</button>
+    <input type="file" id="importFile" class="hidden" accept=".json">
+    <button id="importBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-5 py-2 rounded">Import JSON</button>
+  </div>
+</div>
+
+<script>
+let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+let darkMode = localStorage.getItem('darkMode')==='true';
+let currentFilter = 'All';
+function saveTasks(){ localStorage.setItem('tasks', JSON.stringify(tasks)); }
+function saveDarkMode(){ localStorage.setItem('darkMode', darkMode); }
+function todayDate(){ return new Date().toISOString().slice(0,10); }
+function getFilteredTasks(){ 
+  return tasks.filter(t=> currentFilter==='All' || t.priority===currentFilter)
+              .sort((a,b)=>{
+                const sortVal=document.getElementById('sortSelect').value;
+                if(sortVal==='date') return new Date(a.dueDate)-new Date(b.dueDate);
+                if(sortVal==='priority'){ const order={'High':1,'Normal':2,'Low':3}; return order[a.priority]-order[b.priority]; }
+                if(sortVal==='completed') return a.completed-b.completed;
+              });
+}
+function addTask(){
+  const text=document.getElementById('taskInput').value.trim();
+  const priority=document.getElementById('taskPriority').value;
+  const tag=document.getElementById('taskTag').value.trim();
+  const dueDate=document.getElementById('taskDate').value || todayDate();
+  if(!text) return;
+  tasks.push({text,dueDate,priority,completed:false,tag});
+  document.getElementById('taskInput').value='';
+  document.getElementById('taskTag').value='';
+  document.getElementById('taskDate').value='';
+  renderTasks();
+}
+function deleteTask(index){ tasks.splice(index,1); renderTasks(); }
+function toggleComplete(index){ tasks[index].completed=!tasks[index].completed; renderTasks(); }
+function editTask(index,text){ tasks[index].text=text; saveTasks(); }
+function moveTask(from,to){ const item=tasks.splice(from,1)[0]; tasks.splice(to,0,item); renderTasks(); }
+function clearAll(){ if(confirm('Clear all tasks?')){ tasks=[]; renderTasks(); } }
+function clearCompleted(){ tasks=tasks.filter(t=>!t.completed); renderTasks(); }
+function renderTasks(){
+  const highList=document.getElementById('highTaskList');
+  const normalList=document.getElementById('normalTaskList');
+  const lowList=document.getElementById('lowTaskList');
+  highList.innerHTML=''; normalList.innerHTML=''; lowList.innerHTML='';
+  let highCompleted=0, normalCompleted=0, lowCompleted=0;
+  let highTotal=0, normalTotal=0, lowTotal=0;
+  getFilteredTasks().forEach((task,index)=>{
+    const li=document.createElement('li');
+    li.className=`flex justify-between items-center p-3 rounded shadow fade-in hover:bg-gray-100 transition duration-300`;
+    li.draggable=true;
+    if(task.dueDate===todayDate() && !task.completed) li.classList.add('due-today');
+    const leftDiv=document.createElement('div'); leftDiv.className='flex items-center gap-2';
+    const checkbox=document.createElement('input'); checkbox.type='checkbox'; checkbox.checked=task.completed;
+    checkbox.addEventListener('change',()=>toggleComplete(tasks.indexOf(task)));
+    const taskText=document.createElement('span');
+    taskText.textContent=`${task.text} (${task.tag||''}) - ${task.dueDate}`;
+    if(task.completed) taskText.classList.add('completed');
+    taskText.contentEditable=true; taskText.addEventListener('blur',()=>editTask(tasks.indexOf(task),taskText.textContent));
+    leftDiv.appendChild(checkbox); leftDiv.appendChild(taskText);
+    const delBtn=document.createElement('button'); delBtn.textContent='Delete';
+    delBtn.className='bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition duration-300';
+    delBtn.addEventListener('click',()=>deleteTask(tasks.indexOf(task)));
+    li.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/plain',tasks.indexOf(task)); li.classList.add('dragging'); });
+    li.addEventListener('dragend',()=>li.classList.remove('dragging'));
+    li.addEventListener('dragover',e=>e.preventDefault());
+    li.addEventListener('drop',e=>{ moveTask(e.dataTransfer.getData('text'),tasks.indexOf(task)); });
+    li.appendChild(leftDiv); li.appendChild(delBtn);
+    if(task.priority==='High'){ highList.appendChild(li); highTotal++; if(task.completed) highCompleted++; }
+    else if(task.priority==='Normal'){ normalList.appendChild(li); normalTotal++; if(task.completed) normalCompleted++; }
+    else{ lowList.appendChild(li); lowTotal++; if(task.completed) lowCompleted++; }
+    setTimeout(()=>li.classList.add('show'),50);
+  });
+  document.getElementById('progressHigh').style.width = highTotal? Math.round(highCompleted/highTotal*100)+'%' : '0%';
+  document.getElementById('progressNormal').style.width = normalTotal? Math.round(normalCompleted/normalTotal*100)+'%' : '0%';
+  document.getElementById('progressLow').style.width = lowTotal? Math.round(lowCompleted/lowTotal*100)+'%' : '0%';
+  document.getElementById('countHigh').textContent=highTotal;
+  document.getElementById('countNormal').textContent=normalTotal;
+  document.getElementById('countLow').textContent=lowTotal;
+  saveTasks();
+}
+document.getElementById('searchInput').addEventListener('input',renderTasks);
+document.getElementById('filterAll').addEventListener('click',()=>{ currentFilter='All'; renderTasks(); });
+document.getElementById('filterHigh').addEventListener('click',()=>{ currentFilter='High'; renderTasks(); });
+document.getElementById('filterNormal').addEventListener('click',()=>{ currentFilter='Normal'; renderTasks(); });
+document.getElementById('filterLow').addEventListener('click',()=>{ currentFilter='Low'; renderTasks(); });
+document.getElementById('sortSelect').addEventListener('change',renderTasks);
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const dataStr="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(tasks));
+  const dlAnchor=document.createElement('a'); dlAnchor.setAttribute('href',dataStr);
+  dlAnchor.setAttribute('download','tasks.json'); dlAnchor.click();
+});
+document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change',function(){
+  const file=this.files[0];
+  if(file){
+    const reader=new FileReader();
+    reader.onload=function(e){
+      try{ const imported=JSON.parse(e.target.result); if(Array.isArray(imported)){ tasks=tasks.concat(imported); renderTasks(); } }
+      catch(err){ alert('Invalid JSON'); }
+    }
+    reader.readAsText(file);
+  }
+});
+document.getElementById('darkModeBtn').addEventListener('click',()=>{
+  darkMode=!darkMode; document.body.classList.toggle('dark-mode',darkMode); saveDarkMode();
+});
+if(darkMode) document.body.classList.add('dark-mode');
+document.getElementById('addBtn').addEventListener('click',addTask);
+document.getElementById('taskInput').addEventListener('keypress',e=>{ if(e.key==='Enter') addTask(); });
+document.getElementById('clearAll').addEventListener('click',clearAll);
+document.getElementById('clearCompleted').addEventListener('click',clearCompleted);
+renderTasks();
+</script>
+</body>
+</html>
